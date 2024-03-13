@@ -16,7 +16,6 @@ int main(int argc, char const *argv[])
 
     const int num_operations = 1000; // 测试操作的数量
     srand(time(0)); // 生成随机数种子
-
     // 插入随机键及其值（假设键和值相同）
     auto start = high_resolution_clock::now();
     for (int i = 0; i < num_operations; ++i) {
