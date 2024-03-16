@@ -1,67 +1,74 @@
 #include <iostream>
+#include <vector>
 #include <chrono>
 #include <memory>
-#include <random>
-#include <thread>
-#include <vector>
-#include <mutex>
 #include "MyBPTree.h" 
-
+#include <boost/asio/thread_pool.hpp>
+#include <boost/asio/post.hpp>
+#include <mutex>
+#include <future>
 using namespace std;
 using namespace std::chrono;
+using boost::asio::thread_pool;
 
-mutex tree_mutex; // 全局互斥锁
-
-void insertFunction(unique_ptr<MyBPTree<int, int>>& tree, int num_operations) {
-    random_device rd;
-    mt19937 gen(rd());
-    uniform_int_distribution<> distrib(0, 10000000);
-
-    for (int i = 0; i < num_operations; ++i) {
-        int key = distrib(gen);
-        {
-            lock_guard<mutex> guard(tree_mutex);
-            tree->insert(key, key);
-        }
+void insertFunction(unique_ptr<MyBPTree<int, int>>& tree, int start, int end) {
+    for (int i = start; i < end; ++i) {
+        tree->insert(i, i);
     }
 }
 
-void findFunction(unique_ptr<MyBPTree<int, int>>& tree, int num_operations) {
-    random_device rd;
-    mt19937 gen(rd());
-    uniform_int_distribution<> distrib(0, 10000000);
-
-    for (int i = 0; i < num_operations; ++i) {
-        int key = distrib(gen);
-        lock_guard<mutex> guard(tree_mutex);
-        tree->find(key);
-        
+void findFunction(unique_ptr<MyBPTree<int, int>>& tree, int start, int end) {
+    for (int i = start; i < end; ++i) {
+        tree->find(i);
     }
 }
 
 int main() {
     auto tree = make_unique<MyBPTree<int, int>>();
-    const int num_operations = 100000; // 减少操作数量以避免长时间运行
+    const int num_operations = 1000000; // 插入和查找操作的总数
+    const int num_threads = 4; // 使用的线程数
 
-    // 插入操作的多线程
+    thread_pool pool(num_threads); // 创建拥有指定线程数的线程池
+
     auto start = high_resolution_clock::now();
-    thread insertThread1(insertFunction, ref(tree), num_operations / 2);
-    thread insertThread2(insertFunction, ref(tree), num_operations / 2);
-    insertThread1.join();
-    insertThread2.join();
-    auto stop = high_resolution_clock::now();
-    auto insert_duration = duration_cast<microseconds>(stop - start);
-    cout << "并发插入操作花费了 " << insert_duration.count() << " 微秒。" << endl;
 
-    // 查找操作的多线程
-    start = high_resolution_clock::now();
-    thread findThread1(findFunction, ref(tree), num_operations / 2);
-    thread findThread2(findFunction, ref(tree), num_operations / 2);
-    findThread1.join();
-    findThread2.join();
-    stop = high_resolution_clock::now();
-    auto find_duration = duration_cast<microseconds>(stop - start);
-    cout << "并发查找操作花费了 " << find_duration.count() << " 微秒。" << endl;
+    // 并发插入
+    vector<shared_future<void>> insertFutures;
+    int operationsPerThread = num_operations / num_threads;
+    for (int i = 0; i < num_threads; ++i) {
+        int startIdx = i * operationsPerThread;
+        int endIdx = (i + 1) * operationsPerThread;
+        packaged_task<void()> insertTask([&, startIdx, endIdx] { insertFunction(tree, startIdx, endIdx); });
+        insertFutures.push_back(insertTask.get_future());
+        boost::asio::post(pool, move(insertTask));
+    }
+
+    for (auto& future : insertFutures) {
+        future.wait(); // 等待所有插入操作完成
+    }
+
+    auto mid = high_resolution_clock::now();
+
+    // 并发查找
+    vector<shared_future<void>> findFutures;
+    for (int i = 0; i < num_threads; ++i) {
+        int startIdx = i * operationsPerThread;
+        int endIdx = (i + 1) * operationsPerThread;
+        packaged_task<void()> findTask([&, startIdx, endIdx] { findFunction(tree, startIdx, endIdx); });
+        findFutures.push_back(findTask.get_future());
+        boost::asio::post(pool, move(findTask));
+    }
+
+    for (auto& future : findFutures) {
+        future.wait(); // 等待所有查找操作完成
+    }
+
+    auto end = high_resolution_clock::now();
+
+    auto insert_duration = duration_cast<milliseconds>(mid - start);
+    auto find_duration = duration_cast<milliseconds>(end - mid);
+    cout << "插入" << num_operations << "个元素花费了 " << insert_duration.count() << " 毫秒。" << endl;
+    cout << "查找" << num_operations << "个元素花费了 " << find_duration.count() << " 毫秒。" << endl;
 
     return 0;
 }
