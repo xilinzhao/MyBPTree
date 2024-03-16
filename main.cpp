@@ -1,50 +1,66 @@
-#include <stdlib.h>
-#include <time.h>
-#include <memory>
 #include <iostream>
-#include <chrono> // 用于测量执行时间
-#include "BPTree.h"
 #include <chrono>
+#include <memory>
+#include <random>
 #include <thread>
+#include <vector>
+#include <mutex>
+#include "BPTree.h" // 确保你的BPTree实现是线程安全的
 
 using namespace std;
 using namespace std::chrono;
 
-int main(int argc, char const *argv[])
-{
-    auto tree = make_unique<BPTree<int, int>>(); // 使用智能指针自动管理内存
+mutex tree_mutex; // 全局互斥锁
 
-    const int num_operations = 1000; // 测试操作的数量
-    srand(time(0)); // 生成随机数种子
-    // 插入随机键及其值（假设键和值相同）
-    auto start = high_resolution_clock::now();
+void insertFunction(unique_ptr<BPTree<int, int>>& tree, int num_operations) {
+    random_device rd;
+    mt19937 gen(rd());
+    uniform_int_distribution<> distrib(0, 10000000);
+
     for (int i = 0; i < num_operations; ++i) {
-        int key = rand() % 10000; // 0到9999之间的随机键
-        tree->insert(key, key);
+        int key = distrib(gen);
+        {
+            lock_guard<mutex> guard(tree_mutex);
+            tree->insert(key, key);
+        }
     }
+}
+
+void findFunction(unique_ptr<BPTree<int, int>>& tree, int num_operations) {
+    random_device rd;
+    mt19937 gen(rd());
+    uniform_int_distribution<> distrib(0, 10000000);
+
+    for (int i = 0; i < num_operations; ++i) {
+        int key = distrib(gen);
+        lock_guard<mutex> guard(tree_mutex);
+        tree->find(key);
+    }
+}
+
+int main() {
+    auto tree = make_unique<BPTree<int, int>>();
+    const int num_operations = 100000; // 减少操作数量以避免长时间运行
+
+    // 插入操作的多线程
+    auto start = high_resolution_clock::now();
+    thread insertThread1(insertFunction, ref(tree), num_operations / 2);
+    thread insertThread2(insertFunction, ref(tree), num_operations / 2);
+    insertThread1.join();
+    insertThread2.join();
     auto stop = high_resolution_clock::now();
     auto insert_duration = duration_cast<microseconds>(stop - start);
-    cout << "插入 " << num_operations << " 个键花费了 " << insert_duration.count() << " 微秒。" << endl;
-    
-    // 在程序中的需要暂停的位置添加：
-    std::this_thread::sleep_for(std::chrono::seconds(2));
-    // 扫描树中所有的值
-    cout << "扫描所有值：" << endl;
-    tree->scan();
+    cout << "并发插入操作花费了 " << insert_duration.count() << " 微秒。" << endl;
 
-    // 查找随机键并报告时间
+    // 查找操作的多线程
     start = high_resolution_clock::now();
-    for (int i = 0; i < num_operations; ++i) {
-        int key = rand() % 10000;
-        auto value = tree->find(key);
-        // 若要查看查找结果，请取消以下注释：
-        // cout << "查找键 " << key << ": " << (value ? *value : -1) << endl;
-    }
+    thread findThread1(findFunction, ref(tree), num_operations / 2);
+    thread findThread2(findFunction, ref(tree), num_operations / 2);
+    findThread1.join();
+    findThread2.join();
     stop = high_resolution_clock::now();
     auto find_duration = duration_cast<microseconds>(stop - start);
-    cout << "查找 " << num_operations << " 个随机键花费了 " << find_duration.count() << " 微秒。" << endl;
-
-    // 如果需要，可以类似地实现和测试erase操作。
+    cout << "并发查找操作花费了 " << find_duration.count() << " 微秒。" << endl;
 
     return 0;
 }
