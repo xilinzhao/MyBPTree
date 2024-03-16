@@ -5,7 +5,7 @@
 #include <thread>
 #include <vector>
 #include <mutex>
-#include "MyBPTree.h" // 确保你的MyBPTree实现是线程安全的
+#include "MyBPTree.h" 
 
 using namespace std;
 using namespace std::chrono;
