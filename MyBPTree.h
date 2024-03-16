@@ -5,7 +5,8 @@
 #include <vector>
 #include <queue>
 #include <sys/socket.h>
-
+#include <shared_mutex>
+#include <mutex>
 template<typename KeyT, typename ValT>
 class Node{
 public:
@@ -27,7 +28,7 @@ private:
     Node<KeyT, ValT>* splitLeaf(Node<KeyT, ValT>* _leaf);
     void createIndex(Node<KeyT, ValT>* _new_node, KeyT _index);
     std::pair<Node<KeyT, ValT>*, KeyT> splitNode(Node<KeyT, ValT>* _node);
-
+    mutable std::shared_mutex mutex; // 为树的每个操作提供读写锁
 public:
     MyBPTree();
     void insert(KeyT _key, ValT _val);
@@ -159,6 +160,7 @@ MyBPTree<KeyT, ValT>::MyBPTree() : root(nullptr) {}
 */
 template<typename KeyT, typename ValT>
 void MyBPTree<KeyT, ValT>::insert(KeyT _key, ValT _val){
+    std::unique_lock<std::shared_mutex> lock(mutex);
     if(root == nullptr){
         root = new Node<KeyT, ValT>(LEAF);
         root->key.push_back(_key);
@@ -199,6 +201,7 @@ void MyBPTree<KeyT, ValT>::insert(KeyT _key, ValT _val){
 */
 template<typename KeyT, typename ValT>
 void MyBPTree<KeyT, ValT>::erase(KeyT _key){
+    std::unique_lock<std::shared_mutex> lock(mutex);
     std::pair<Node<KeyT, ValT>*, int> pair = keyIndexInLeaf(_key);
     Node<KeyT, ValT> *leaf = pair.first;
     int loc = pair.second;
@@ -216,6 +219,7 @@ void MyBPTree<KeyT, ValT>::erase(KeyT _key){
 */
 template<typename KeyT, typename ValT>
 ValT *MyBPTree<KeyT, ValT>::find(KeyT _key){
+    std::shared_lock<std::shared_mutex> lock(mutex);
     std::pair<Node<KeyT, ValT>*, int> pair = keyIndexInLeaf(_key);
     Node<KeyT, ValT> *leaf = pair.first;
     int loc = pair.second;
