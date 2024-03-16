@@ -5,14 +5,14 @@
 #include <thread>
 #include <vector>
 #include <mutex>
-#include "BPTree.h" // 确保你的BPTree实现是线程安全的
+#include "MyBPTree.h" // 确保你的MyBPTree实现是线程安全的
 
 using namespace std;
 using namespace std::chrono;
 
 mutex tree_mutex; // 全局互斥锁
 
-void insertFunction(unique_ptr<BPTree<int, int>>& tree, int num_operations) {
+void insertFunction(unique_ptr<MyBPTree<int, int>>& tree, int num_operations) {
     random_device rd;
     mt19937 gen(rd());
     uniform_int_distribution<> distrib(0, 10000000);
@@ -26,7 +26,7 @@ void insertFunction(unique_ptr<BPTree<int, int>>& tree, int num_operations) {
     }
 }
 
-void findFunction(unique_ptr<BPTree<int, int>>& tree, int num_operations) {
+void findFunction(unique_ptr<MyBPTree<int, int>>& tree, int num_operations) {
     random_device rd;
     mt19937 gen(rd());
     uniform_int_distribution<> distrib(0, 10000000);
@@ -35,11 +35,12 @@ void findFunction(unique_ptr<BPTree<int, int>>& tree, int num_operations) {
         int key = distrib(gen);
         lock_guard<mutex> guard(tree_mutex);
         tree->find(key);
+        
     }
 }
 
 int main() {
-    auto tree = make_unique<BPTree<int, int>>();
+    auto tree = make_unique<MyBPTree<int, int>>();
     const int num_operations = 100000; // 减少操作数量以避免长时间运行
 
     // 插入操作的多线程
